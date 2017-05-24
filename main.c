@@ -26,7 +26,6 @@ void UART0_putchar(char data);
 void UART0_puts(char *str);
 void viaje_Status( void );
 
-
 static volatile uint8_t taxiStat = 1;
 static volatile uint8_t rebote = 0;
 static volatile uint8_t rebotePK2 = 0;
@@ -37,7 +36,6 @@ static volatile uint16_t costoViaje = 0;
 static volatile uint16_t costoKM = 10;
 static volatile uint16_t pulsoKM = 0;
 static volatile uint16_t decSeg = 0;
-
 
 int main(void)
 {
@@ -219,7 +217,7 @@ void taxi_Status( void )
 	 {
 		 decSeg++;
 		 mSecP = 0;
-		 if(decSeg == 18000)
+		 if(decSeg == 300)
 		 {
 			  UART0_puts("\n\rCARRO PARADO, se incrementara 12.5mts");
 			  pulsoKM +=5;
