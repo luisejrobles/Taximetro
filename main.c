@@ -9,26 +9,35 @@
 #include <avr/io.h>
 #include <avr/interrupt.h>
 #include <inttypes.h>
+
 #define LIBRE 1
 #define OCUPADO 0
 #define PAGAR 2
 
+unsigned int atoi(char *str);
 void init_PORTK( void );
 void itoa(char *str, uint16_t number, uint8_t base);
+void taxi_Status( void );
 void TIMER0_init( void );
 void UART0_init( void );
 char UART0_getchar(void);
 void UART0_gets(char *str);
 void UART0_putchar(char data);
 void UART0_puts(char *str);
-unsigned int atoi(char *str);
+void viaje_Status( void );
 
-static volatile uint8_t cnt = 1;
+
+static volatile uint8_t taxiStat = 1;
 static volatile uint8_t rebote = 0;
 static volatile uint8_t rebotePK2 = 0;
-static volatile uint8_t mSec;
 static volatile uint8_t mSecPK2;
-static volatile uint16_t cuenta = 0;
+static volatile uint16_t mSec = 0;
+static volatile uint16_t mSecP = 0;
+static volatile uint16_t costoViaje = 0;
+static volatile uint16_t costoKM = 10;
+static volatile uint16_t pulsoKM = 0;
+static volatile uint16_t decSeg = 0;
+
 
 int main(void)
 {
@@ -38,35 +47,16 @@ int main(void)
 	UART0_puts("INICIO TAXI, LIBRE");
     while (1) 
     {
-		if( !(PINK &(1<<PK0))&&(rebote == 0) )
-		{
-			rebote = 1;
-			mSec = 0;
-			//UART0_puts("\n\rPresionado!");
-			if(cnt == LIBRE)
-			{
-				PORTK &= ~(1<<PK3);
-				cnt = 0;
-				cuenta +=10;
-				UART0_puts("\n\rTAXI OCUPADO");
-			}else if(cnt == OCUPADO)
-			{
-				cnt = 2;
-				UART0_puts("\n\rPAGAR");
-			}else if(cnt == PAGAR)
-			{
-				cnt = 1;
-				PORTK ^= (1<<PK3);
-				UART0_puts("\n\rLIBRE");
-			}
-		}
+		taxi_Status();
 		
-		if( !(PINK&(1<<PK1))&& (rebotePK2==0) )
+		if( (taxiStat == OCUPADO) && (!(PINK&(1<<PK1))&& (rebotePK2==0)) )
 		{
 			rebotePK2 = 1;
-			mSecPK2 = 0;
-			
-			
+			mSec = 0;
+			mSecP = 0;
+			decSeg = 0;
+			UART0_puts("\n\r+2.5");
+			pulsoKM++;
 		}
     }
 }
@@ -189,17 +179,66 @@ unsigned int atoi(char *str)
 	 }
 	 return num;
  }
+void taxi_Status( void )
+{
+	char dineroViaje[20];
+	
+	if( !(PINK &(1<<PK0))&&(rebote == 0) )
+	{
+		rebote = 1;
+		mSec = 0;
+		if(taxiStat == LIBRE)
+		{
+			PORTK &= ~(1<<PK3);				//LED off
+			taxiStat = 0;
+			costoViaje = 10;
+			UART0_puts("\n\rTAXI OCUPADO");
+		}else if(taxiStat == OCUPADO)
+		{
+			taxiStat = 2;
+			costoViaje += (((pulsoKM*2.5)/1000)*10); 
+			itoa(dineroViaje,costoViaje,10);
+			UART0_puts("\n\rPAGAR: ");
+			UART0_puts(dineroViaje);
+			UART0_getchar();
+		}else if(taxiStat == PAGAR)
+		{
+			taxiStat = 1;
+			PORTK ^= (1<<PK3);				//LED on
+			UART0_puts("\n\rLIBRE");
+			costoViaje = 0;
+		}
+	}
+}
  ISR(TIMER0_COMPA_vect)
  {
 	 mSec++;
-	 mSecPK2++;
-	 if( (rebote == 1)&&(mSec == 200) )
+	 mSecP++;
+	 
+	 if( (mSecP == 200)&&(PINK&(1<<PK1))&&(taxiStat == OCUPADO) )
+	 {
+		 decSeg++;
+		 mSecP = 0;
+		 if(decSeg == 18000)
+		 {
+			  UART0_puts("\n\rCARRO PARADO, se incrementara 12.5mts");
+			  pulsoKM +=5;
+			  decSeg = 0;
+		 }
+	 }
+	 if( (rebote)&&(mSec == 200) )
 	 {
 		 rebote = 0;
 	 }
-	 
-	 if( (rebotePK2 == 1)&&(mSecPK2 == 200))
+	 if( (rebotePK2)&&(mSec <= 50) )
 	 {
-		 rebotePK2;
+		 PORTK |= (1<<PK2);
+	 }else
+	 {
+		 PORTK &= ~(1<<PK2);
+	 }
+	 if( (rebotePK2)&&(mSec == 200))
+	 {
+		 rebotePK2 = 0;
 	 }
  }
